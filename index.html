@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFXIV Glamour Log</title>
+<meta name="description" content="A tiny offline tracker for FFXIV glamour plates: outfit cards, dye notes, shared-piece warnings, an idea scratchpad, and a shopping list. Local-only, zero dependencies.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%E2%9C%A6</text></svg>">
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: #120f19;
+    color: #efecf5;
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  ::selection { background: rgba(217, 180, 92, .35); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 1.2rem; }
+  .site-header {
+    background: linear-gradient(180deg, #1d1730 0%, #151022 82%);
+    border-bottom: 1px solid rgba(217, 180, 92, .35);
+    padding: 1.6rem 0 1.2rem;
+  }
+  .eyebrow {
+    font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+    color: #d9b45c; margin: 0 0 .3rem;
+  }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+    margin: 0; letter-spacing: .01em; color: #f5e3b8;
+  }
+  .tagline { color: #a9a1c4; max-width: 60ch; margin: .5rem 0 0; }
+  .backup-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+  .btn {
+    background: #241d38; border: 1px solid #3d3358; color: #efecf5;
+    padding: .42rem .8rem; border-radius: 10px; font: inherit; font-size: .85rem;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .btn:hover { border-color: #d9b45c; background: #2c2347; }
+  .btn:focus-visible, .chip:focus-visible, .mini-tag:focus-visible, .own-toggle:focus-visible,
+  input:focus-visible, textarea:focus-visible {
+    outline: 2px solid rgba(217, 180, 92, .6); outline-offset: 1px;
+  }
+  .btn.primary {
+    background: linear-gradient(180deg, #d9b45c, #b4923f);
+    border-color: #d9b45c; color: #1b1524; font-weight: 600;
+  }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn.small { padding: .25rem .6rem; font-size: .78rem; }
+  .btn.ghost { background: transparent; }
+  .btn.danger:hover { border-color: #e07b7b; color: #f0b5b5; }
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 1fr);
+    gap: 1.6rem; padding-top: 1.4rem; padding-bottom: 2.5rem;
+  }
+  @media (min-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr) 340px; } }
+  .toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .9rem; }
+  #search-input {
+    flex: 1; min-width: 200px; background: #1c1729; border: 1px solid #3d3358;
+    color: #efecf5; border-radius: 10px; padding: .45rem .75rem; font: inherit; font-size: .9rem;
+  }
+  #search-input:focus { outline: 2px solid rgba(217, 180, 92, .35); border-color: #d9b45c; }
+  .statline { flex-basis: 100%; margin: 0; color: #a9a1c4; font-size: .82rem; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .35rem 0; }
+  .chip {
+    background: transparent; border: 1px solid #3d3358; color: #cfc7e4;
+    padding: .22rem .7rem; border-radius: 999px; font-size: .78rem; cursor: pointer; font: inherit;
+  }
+  .chip:hover { border-color: #d9b45c; }
+  .chip.active { border-color: #d9b45c; color: #f5e3b8; background: rgba(217, 180, 92, .14); }
+  .job-title {
+    font-family: Georgia, serif; color: #d9b45c; font-size: 1.05rem;
+    margin: 1.3rem 0 .6rem; letter-spacing: .03em;
+  }
+  .job-title .count { color: #8f86b4; font-size: .8rem; font-family: system-ui, sans-serif; margin-left: .4rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+  .card {
+    background: linear-gradient(180deg, #221b33, #1c1628);
+    border: 1px solid #382f52; border-top: 3px solid #7f6bd0;
+    border-radius: 14px; padding: .9rem 1rem 1rem;
+    display: flex; flex-direction: column; gap: .55rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+  }
+  .card-head { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; justify-content: space-between; }
+  .card h3 { margin: 0; font-family: Georgia, serif; font-size: 1.08rem; color: #f5e3b8; font-weight: 600; }
+  .job-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: #a9a1c4; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+  .badge {
+    font-size: .72rem; border: 1px solid rgba(232, 180, 90, .5); color: #e8b45a;
+    background: rgba(232, 180, 90, .1); border-radius: 999px; padding: .1rem .55rem; cursor: help;
+  }
+  .badge.miss { border-color: rgba(224, 123, 123, .55); color: #efa4a4; background: rgba(224, 123, 123, .1); }
+  .mini-tag {
+    font-size: .72rem; border: 1px solid #453a63; color: #cfc7e4; border-radius: 999px;
+    padding: .1rem .55rem; background: transparent; cursor: pointer; font: inherit;
+  }
+  .mini-tag:hover { border-color: #d9b45c; color: #f5e3b8; }
+  .pieces { border-top: 1px dashed #42375f; margin-top: .2rem; }
+  .piece-row {
+    display: grid; grid-template-columns: 64px 1fr auto; gap: .5rem; align-items: baseline;
+    padding: .34rem 0; border-bottom: 1px dashed #2e2645;
+  }
+  .slot-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; color: #8f86b4; }
+  .piece-name { color: #e8e2f4; overflow-wrap: anywhere; }
+  .piece-name.missing { color: #efa4a4; }
+  .piece-dye-note { color: #8f86b4; font-size: .82rem; font-style: italic; overflow-wrap: anywhere; }
+  .own-toggle {
+    background: none; border: none; color: #8fd6a2; font-size: .74rem; cursor: pointer;
+    padding: .1rem .2rem; border-radius: 6px; font: inherit;
+  }
+  .own-toggle.missing {
+    color: #e8b45a; border: 1px dashed rgba(232, 180, 90, .5); padding: .05rem .45rem;
+  }
+  .empty-slots { color: #6f668f; font-size: .76rem; font-style: italic; }
+  .snapshot {
+    color: #cfd6ea; font-size: .85rem; background: rgba(143, 123, 208, .08);
+    border: 1px solid #382f52; border-radius: 10px; padding: .4rem .6rem;
+  }
+  .snapshot .lbl {
+    font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
+    color: #8f86b4; display: block; margin-bottom: .15rem;
+  }
+  .card-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+  .empty-state {
+    border: 1px dashed #42375f; border-radius: 14px; padding: 1.6rem;
+    text-align: center; color: #a9a1c4; margin-top: 1rem;
+  }
+  .empty-state p { margin: .4rem 0; }
+  .panel {
+    background: #1b1626; border: 1px solid #382f52; border-radius: 14px;
+    padding: 1rem; margin-bottom: 1.1rem;
+  }
+  .panel h2 { margin: .1rem 0 .2rem; font-family: Georgia, serif; font-size: 1.02rem; color: #f5e3b8; }
+  .panel-hint { color: #8f86b4; font-size: .78rem; margin: .1rem 0 .7rem; }
+  .list-item { border-top: 1px dashed #2e2645; padding: .55rem 0; display: flex; flex-direction: column; gap: .3rem; }
+  .item-line { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+  .item-name { color: #e8e2f4; font-size: .92rem; overflow-wrap: anywhere; }
+  .count-pill { font-size: .72rem; color: #e8b45a; border: 1px solid rgba(232, 180, 90, .4); border-radius: 999px; padding: .05rem .5rem; }
+  .ref-note { color: #8f86b4; font-size: .78rem; overflow-wrap: anywhere; }
+  .ref-chip {
+    display: inline-block; font-size: .74rem; color: #cfc7e4; border: 1px solid #453a63;
+    border-radius: 8px; padding: .05rem .45rem; margin: .15rem .25rem 0 0;
+  }
+  .panel .empty-note { color: #8f86b4; font-size: .85rem; font-style: italic; margin: .3rem 0 0; }
+  .idea-form { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .6rem; }
+  .idea-text { color: #e8e2f4; white-space: pre-wrap; font-size: .9rem; margin: 0; overflow-wrap: anywhere; }
+  .idea-date { color: #6f668f; font-size: .72rem; }
+  .idea-actions { display: flex; gap: .4rem; }
+  dialog {
+    background: #1e1830; color: #efecf5; border: 1px solid #4a3e6e; border-radius: 16px;
+    padding: 1.2rem 1.3rem; width: min(94vw, 640px); box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  }
+  dialog::backdrop { background: rgba(9, 7, 16, .72); }
+  dialog h2 { margin: 0 0 .6rem; font-family: Georgia, serif; color: #f5e3b8; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+  form label { display: flex; flex-direction: column; gap: .28rem; font-size: .8rem; color: #a9a1c4; }
+  form input, form textarea {
+    background: #161129; border: 1px solid #3d3358; border-radius: 9px; color: #efecf5;
+    padding: .42rem .6rem; font: inherit; font-size: .9rem; width: 100%;
+  }
+  form input:focus, form textarea:focus { outline: 2px solid rgba(217, 180, 92, .4); border-color: #d9b45c; }
+  form fieldset { border: 1px solid #3d3358; border-radius: 12px; padding: .6rem .8rem .8rem; margin: .9rem 0 0; }
+  form legend {
+    font-size: .7rem; letter-spacing: .16em; text-transform: uppercase;
+    color: #d9b45c; padding: 0 .35rem;
+  }
+  .legend-note { color: #8f86b4; font-size: .68rem; letter-spacing: 0; text-transform: none; }
+  .tag-checks { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; font-size: .85rem; }
+  .tag-checks label { display: flex; flex-direction: row; align-items: center; gap: .3rem; color: #cfc7e4; }
+  .tag-checks input[type="checkbox"] { width: auto; accent-color: #d9b45c; }
+  #field-tags-custom { flex: 1; min-width: 180px; }
+  .piece-edit-row {
+    display: grid; grid-template-columns: 70px 1fr 150px 90px; gap: .5rem;
+    align-items: center; padding: .25rem 0;
+  }
+  @media (max-width: 560px) { .piece-edit-row { grid-template-columns: 70px 1fr; } }
+  .owned-check { display: flex; align-items: center; gap: .3rem; font-size: .78rem; color: #cfc7e4; }
+  .owned-check input { width: auto; accent-color: #d9b45c; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.1rem; }
+  .form-error {
+    color: #efa4a4; background: rgba(224, 123, 123, .1);
+    border: 1px solid rgba(224, 123, 123, .45); border-radius: 9px;
+    padding: .35rem .6rem; font-size: .84rem;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 1.1rem; transform: translateX(-50%) translateY(18px);
+    background: #241d38; border: 1px solid #d9b45c; color: #f5e3b8;
+    padding: .4rem .9rem; border-radius: 999px; font-size: .82rem;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .site-footer { border-top: 1px solid #2e2645; padding: 1.2rem 0 2rem; color: #8f86b4; font-size: .8rem; }
+  .site-footer p { margin: .25rem 0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78em; }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <p class="eyebrow">Asdale Dynamics &middot; Local-first tools</p>
+    <h1>FFXIV Glamour Log</h1>
+    <p class="tagline">Track glamour plates per job, keep dye notes and screenshot ideas, spot pieces shared across plates, park outfit ideas in a scratchpad, and keep a shopping list of pieces you still need. Everything stays on this device.</p>
+    <div class="backup-row">
+      <button id="btn-export" class="btn small" type="button" title="Download all data as a JSON file">Save backup</button>
+      <button id="btn-import" class="btn small" type="button" title="Restore data from a JSON backup file">Load backup</button>
+      <button id="btn-sample" class="btn small" type="button" title="Replace current data with a small demo set">Load sample data</button>
+      <button id="btn-clear-data" class="btn small danger" type="button" title="Delete all plates and ideas from this browser">Erase everything</button>
+      <input id="import-file" type="file" accept="application/json,.json" hidden>
+    </div>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <section class="main-col">
+    <div class="toolbar">
+      <button id="btn-new-plate" class="btn primary" type="button">+ New plate</button>
+      <input id="search-input" type="search" placeholder="Search plates, pieces, dyes, tags..." aria-label="Search outfits">
+      <p id="statline" class="statline" role="status"></p>
+    </div>
+    <nav aria-label="Filters">
+      <div id="jobs-row" class="chip-row"></div>
+      <div id="tags-row" class="chip-row"></div>
+    </nav>
+    <div id="outfits-area"></div>
+  </section>
+
+  <aside class="side-col">
+    <section class="panel">
+      <h2>Shared pieces</h2>
+      <p class="panel-hint">The same piece used by more than one plate. Handy to know before you re-dye or deconstruct anything.</p>
+      <div id="shared-list"></div>
+    </section>
+    <section class="panel">
+      <h2>Shopping list</h2>
+      <p class="panel-hint">Every piece marked &ldquo;need it&rdquo; on your plates, gathered in one place.</p>
+      <div id="shopping-list"></div>
+    </section>
+    <section class="panel">
+      <h2>Outfit scratchpad</h2>
+      <p class="panel-hint">Half-formed ideas live here until they are ready to become a plate.</p>
+      <form id="idea-form" class="idea-form">
+        <textarea id="idea-input" rows="2" placeholder="e.g. Moonfire Faire look: straw hat + summer tunic, dye Honey Yellow" aria-label="New outfit idea"></textarea>
+        <button type="submit" class="btn small">Add idea</button>
+      </form>
+      <div id="ideas-list"></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Made by <strong>Asdale Dynamics, LLC</strong> &mdash; beginner-friendly guides and practical tools at <span class="mono">dylanasdale.github.io</span>.</p>
+    <p>Unofficial fan tool, not affiliated with or endorsed by Square Enix. FINAL FANTASY XIV is a trademark of Square Enix Holdings Co., Ltd.</p>
+    <p>No accounts, no servers, no tracking. Your data lives in this browser only.</p>
+  </div>
+</footer>
+
+<dialog id="outfit-dialog" aria-labelledby="dialog-title">
+  <form id="outfit-form" novalidate>
+    <h2 id="dialog-title">New plate</h2>
+    <p id="form-error" class="form-error" hidden></p>
+    <div class="form-grid">
+      <label>Job
+        <input id="field-job" list="job-list" placeholder="e.g. Dark Knight">
+      </label>
+      <label>Plate name
+        <input id="field-plate" placeholder="e.g. Raid Night Heals">
+      </label>
+    </div>
+    <label style="margin-top:.7rem">Screenshot notes
+      <textarea id="field-screenshot" rows="2" placeholder="Where the shot lives: /gpose location, emote, caption, album slot..."></textarea>
+    </label>
+    <fieldset>
+      <legend>Tags</legend>
+      <div class="tag-checks">
+        <label><input type="checkbox" id="tag-casual"> Casual</label>
+        <label><input type="checkbox" id="tag-raid-night"> Raid Night</label>
+        <label><input type="checkbox" id="tag-season"> Season</label>
+        <input id="field-tags-custom" placeholder="extra tags, comma separated" aria-label="Custom tags">
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Pieces <span class="legend-note">uncheck &ldquo;owned&rdquo; for pieces you still need</span></legend>
+      <div id="pieces-editor"></div>
+    </fieldset>
+    <div class="dialog-actions">
+      <button type="button" id="btn-cancel" class="btn">Cancel</button>
+      <button type="submit" class="btn primary">Save plate</button>
+    </div>
+    <datalist id="job-list">
+      <option value="Paladin"></option><option value="Warrior"></option>
+      <option value="Dark Knight"></option><option value="Gunbreaker"></option>
+      <option value="White Mage"></option><option value="Scholar"></option>
+      <option value="Astrologian"></option><option value="Sage"></option>
+      <option value="Black Mage"></option><option value="Summoner"></option>
+      <option value="Red Mage"></option><option value="Pictomancer"></option>
+      <option value="Monk"></option><option value="Dragoon"></option>
+      <option value="Ninja"></option><option value="Samurai"></option>
+      <option value="Reaper"></option><option value="Viper"></option>
+      <option value="Bard"></option><option value="Machinist"></option>
+      <option value="Dancer"></option><option value="Blue Mage"></option>
+      <option value="Carpenter"></option><option value="Blacksmith"></option>
+      <option value="Armorer"></option><option value="Goldsmith"></option>
+      <option value="Leatherworker"></option><option value="Weaver"></option>
+      <option value="Alchemist"></option><option value="Culinarian"></option>
+      <option value="Miner"></option><option value="Botanist"></option>
+      <option value="Fisher"></option><option value="General"></option>
+    </datalist>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  const SLOT_NAMES = ["Weapon", "Head", "Body", "Hands", "Legs", "Feet"];
+
+  function normalizePieceName(value) {
+    if (typeof value !== "string") return "";
+    let out = value;
+    let open = out.indexOf("(");
+    while (open !== -1) {
+      const close = out.indexOf(")", open);
+      out = close === -1 ? out.slice(0, open) : out.slice(0, open) + " " + out.slice(close + 1);
+      open = out.indexOf("(");
+    }
+    return out.replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function tidyDisplay(value) {
+    return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  }
+
+  function findCrossSetDups(outfits) {
+    const groups = new Map();
+    const list = Array.isArray(outfits) ? outfits : [];
+    for (const outfit of list) {
+      if (!outfit || typeof outfit !== "object" || outfit.id === undefined) continue;
+      const pieces = Array.isArray(outfit.pieces) ? outfit.pieces : [];
+      const seen = new Set();
+      for (const piece of pieces) {
+        const raw = piece && typeof piece === "object" ? piece.name : "";
+        const key = normalizePieceName(raw);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        let group = groups.get(key);
+        if (!group) {
+          group = { key, display: tidyDisplay(raw), sets: [] };
+          groups.set(key, group);
+        }
+        group.sets.push({
+          outfitId: outfit.id,
+          job: outfit.job || "",
+          plate: outfit.plate || "",
+          slot: piece.slot || "",
+        });
+      }
+    }
+    return Array.from(groups.values()).filter((g) => g.sets.length > 1);
+  }
+
+  function findWithinSetDups(outfit) {
+    if (!outfit || typeof outfit !== "object") return [];
+    const groups = new Map();
+    const pieces = Array.isArray(outfit.pieces) ? outfit.pieces : [];
+    for (const piece of pieces) {
+      const raw = piece && typeof piece === "object" ? piece.name : "";
+      const key = normalizePieceName(raw);
+      if (!key) continue;
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, display: tidyDisplay(raw), slots: [] };
+        groups.set(key, group);
+      }
+      group.slots.push((piece && piece.slot) || "");
+    }
+    return Array.from(groups.values()).filter((g) => g.slots.length > 1);
+  }
+
+  function buildShoppingList(outfits) {
+    const groups = new Map();
+    const list = Array.isArray(outfits) ? outfits : [];
+    for (const outfit of list) {
+      if (!outfit || typeof outfit !== "object") continue;
+      const pieces = Array.isArray(outfit.pieces) ? outfit.pieces : [];
+      for (const piece of pieces) {
+        const raw = piece && typeof piece === "object" ? piece.name : "";
+        const key = normalizePieceName(raw);
+        if (!key || !piece || piece.owned !== false) continue;
+        let group = groups.get(key);
+        if (!group) {
+          group = { key, display: tidyDisplay(raw), count: 0, refs: [] };
+          groups.set(key, group);
+        }
+        group.count += 1;
+        group.refs.push({
+          outfitId: outfit.id || "",
+          job: outfit.job || "",
+          plate: outfit.plate || "",
+          slot: piece.slot || "",
+        });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  }
+
+  function collectTags(outfits) {
+    const found = new Set();
+    const list = Array.isArray(outfits) ? outfits : [];
+    for (const outfit of list) {
+      if (!outfit || !Array.isArray(outfit.tags)) continue;
+      for (const tag of outfit.tags) {
+        if (typeof tag === "string" && tag.trim()) found.add(tag.trim().toLowerCase());
+      }
+    }
+    return Array.from(found).sort();
+  }
+
+  const GLAMOUR_CORE = { SLOT_NAMES, normalizePieceName, findCrossSetDups, findWithinSetDups, buildShoppingList, collectTags };
+  if (typeof globalThis !== "undefined") globalThis.GLAMOUR_CORE = GLAMOUR_CORE;
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+  if (typeof document === "undefined") return;
+  const { SLOT_NAMES, normalizePieceName, findCrossSetDups, findWithinSetDups, buildShoppingList, collectTags } = globalThis.GLAMOUR_CORE;
+
+  const STORAGE_KEY = "ffxiv-glamour-log-v1";
+  const PRESET_TAGS = ["casual", "raid night", "season"];
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    statline: $("statline"),
+    jobsRow: $("jobs-row"),
+    tagsRow: $("tags-row"),
+    search: $("search-input"),
+    outfitsArea: $("outfits-area"),
+    sharedList: $("shared-list"),
+    shoppingList: $("shopping-list"),
+    ideasList: $("ideas-list"),
+    ideaInput: $("idea-input"),
+    ideaForm: $("idea-form"),
+    dialog: $("outfit-dialog"),
+    dialogTitle: $("dialog-title"),
+    form: $("outfit-form"),
+    formError: $("form-error"),
+    fieldJob: $("field-job"),
+    fieldPlate: $("field-plate"),
+    fieldScreenshot: $("field-screenshot"),
+    fieldTagsCustom: $("field-tags-custom"),
+    tagChecks: { casual: $("tag-casual"), "raid night": $("tag-raid-night"), season: $("tag-season") },
+    piecesEditor: $("pieces-editor"),
+    btnNewPlate: $("btn-new-plate"),
+    btnCancel: $("btn-cancel"),
+    btnExport: $("btn-export"),
+    btnImport: $("btn-import"),
+    importFile: $("import-file"),
+    btnSample: $("btn-sample"),
+    btnClearData: $("btn-clear-data"),
+    toast: $("toast"),
+  };
+
+  let state = loadState();
+  const ui = { job: "all", tag: "", query: "" };
+  let editingId = null;
+  let toastTimer = null;
+
+  function genId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function defaultPieces() {
+    return SLOT_NAMES.map((slot) => ({ slot, name: "", dye: "", owned: true }));
+  }
+
+  function hydrateOutfit(raw) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    const pieces = defaultPieces();
+    if (Array.isArray(source.pieces)) {
+      for (const piece of source.pieces) {
+        if (!piece || typeof piece !== "object") continue;
+        const match = pieces.find((p) => p.slot === piece.slot);
+        if (match) {
+          match.name = typeof piece.name === "string" ? piece.name : "";
+          match.dye = typeof piece.dye === "string" ? piece.dye : "";
+          match.owned = piece.owned !== false;
+        }
+      }
+    }
+    const tags = Array.isArray(source.tags)
+      ? Array.from(new Set(source.tags.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim().toLowerCase())))
+      : [];
+    return {
+      id: typeof source.id === "string" && source.id ? source.id : genId(),
+      job: typeof source.job === "string" && source.job.trim() ? source.job.trim() : "General",
+      plate: typeof source.plate === "string" && source.plate.trim() ? source.plate.trim() : "Untitled plate",
+      pieces,
+      tags,
+      screenshot: typeof source.screenshot === "string" ? source.screenshot : "",
+      createdAt: typeof source.createdAt === "string" ? source.createdAt : new Date().toISOString(),
+      updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : new Date().toISOString(),
+    };
+  }
+
+  function hydrateIdea(raw) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    return {
+      id: typeof source.id === "string" && source.id ? source.id : genId(),
+      text: typeof source.text === "string" ? source.text : "",
+      createdAt: typeof source.createdAt === "string" ? source.createdAt : new Date().toISOString(),
+    };
+  }
+
+  function freshState() {
+    return { version: 1, outfits: [], ideas: [], updatedAt: new Date().toISOString() };
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return freshState();
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.outfits) || !Array.isArray(parsed.ideas)) return freshState();
+      return {
+        version: 1,
+        outfits: parsed.outfits.map(hydrateOutfit),
+        ideas: parsed.ideas.map(hydrateIdea),
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (err) {
+      return freshState();
+    }
+  }
+
+  function save() {
+    state.updatedAt = new Date().toISOString();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      showToast("Saved");
+    } catch (err) {
+      showToast("Storage unavailable - changes not saved");
+    }
+  }
+
+  function showToast(message) {
+    els.toast.textContent = message;
+    els.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove("show"), 1600);
+  }
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function jobHue(job) {
+    let h = 0;
+    for (const ch of String(job)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return h;
+  }
+
+  function plural(n, word) {
+    return `${n} ${word}${n === 1 ? "" : "s"}`;
+  }
+
+  function namedPieces(outfit) {
+    return outfit.pieces.filter((p) => p.name.trim());
+  }
+
+  function computeSharedIndex(groups) {
+    const index = new Map();
+    for (const group of groups) {
+      for (const set of group.sets) {
+        const list = index.get(set.outfitId) || [];
+        list.push(group);
+        index.set(set.outfitId, list);
+      }
+    }
+    return index;
+  }
+
+  function filteredOutfits() {
+    const query = ui.query.trim().toLowerCase();
+    return state.outfits.filter((outfit) => {
+      if (ui.job !== "all" && outfit.job !== ui.job) return false;
+      if (ui.tag && !outfit.tags.includes(ui.tag)) return false;
+      if (!query) return true;
+      const haystack = [
+        outfit.plate,
+        outfit.job,
+        outfit.screenshot,
+        outfit.tags.join(" "),
+        ...outfit.pieces.map((p) => `${p.name} ${p.dye}`),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  function renderStats() {
+    const outfits = state.outfits;
+    const jobs = new Set(outfits.map((o) => o.job));
+    const pieces = outfits.reduce((sum, o) => sum + namedPieces(o).length, 0);
+    const missing = outfits.reduce((sum, o) => sum + namedPieces(o).filter((p) => !p.owned).length, 0);
+    const shared = findCrossSetDups(outfits).length;
+    const parts = [
+      plural(outfits.length, "plate"),
+      plural(jobs.size, "job"),
+      plural(pieces, "piece logged"),
+      plural(missing, "to find"),
+      plural(shared, "shared-item warning"),
+      plural(state.ideas.length, "idea"),
+    ];
+    els.statline.textContent = parts.join(" \u00b7 ");
+  }
+
+  function renderFilters() {
+    const jobs = Array.from(new Set(state.outfits.map((o) => o.job))).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+    els.jobsRow.textContent = "";
+    const allBtn = el("button", "chip" + (ui.job === "all" ? " active" : ""), `All jobs (${state.outfits.length})`);
+    allBtn.type = "button";
+    allBtn.addEventListener("click", () => {
+      ui.job = "all";
+      renderAll();
+    });
+    els.jobsRow.append(allBtn);
+    for (const job of jobs) {
+      const count = state.outfits.filter((o) => o.job === job).length;
+      const btn = el("button", "chip" + (ui.job === job ? " active" : ""), `${job} (${count})`);
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        ui.job = job;
+        renderAll();
+      });
+      els.jobsRow.append(btn);
+    }
+
+    const tags = collectTags(state.outfits);
+    els.tagsRow.textContent = "";
+    const tagAll = el("button", "chip" + (ui.tag === "" ? " active" : ""), "All tags");
+    tagAll.type = "button";
+    tagAll.addEventListener("click", () => {
+      ui.tag = "";
+      renderAll();
+    });
+    els.tagsRow.append(tagAll);
+    for (const tag of tags) {
+      const count = state.outfits.filter((o) => o.tags.includes(tag)).length;
+      const btn = el("button", "chip" + (ui.tag === tag ? " active" : ""), `${tag} (${count})`);
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        ui.tag = ui.tag === tag ? "" : tag;
+        renderAll();
+      });
+      els.tagsRow.append(btn);
+    }
+  }
+
+  function renderCards(sharedIndex) {
+    els.outfitsArea.textContent = "";
+    const visible = filteredOutfits();
+
+    if (state.outfits.length === 0) {
+      const empty = el("div", "empty-state");
+      empty.append(el("p", "", "No plates yet. Every look starts with one."));
+      const start = el("button", "btn primary", "Add your first plate");
+      start.type = "button";
+      start.addEventListener("click", () => openOutfitDialog(null));
+      empty.append(start);
+      els.outfitsArea.append(empty);
+      return;
+    }
+
+    if (visible.length === 0) {
+      const empty = el("div", "empty-state");
+      empty.append(el("p", "", "No plates match your filters."));
+      const clear = el("button", "btn", "Clear filters");
+      clear.type = "button";
+      clear.addEventListener("click", () => {
+        ui.job = "all";
+        ui.tag = "";
+        ui.query = "";
+        els.search.value = "";
+        renderAll();
+      });
+      empty.append(clear);
+      els.outfitsArea.append(empty);
+      return;
+    }
+
+    const byJob = new Map();
+    for (const outfit of visible) {
+      const list = byJob.get(outfit.job) || [];
+      list.push(outfit);
+      byJob.set(outfit.job, list);
+    }
+    const jobNames = Array.from(byJob.keys()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+    for (const job of jobNames) {
+      const title = el("h2", "job-title", job);
+      title.append(el("span", "count", `(${byJob.get(job).length})`));
+      els.outfitsArea.append(title);
+      const grid = el("div", "cards");
+      const sorted = byJob.get(job).slice().sort((a, b) => a.plate.toLowerCase().localeCompare(b.plate.toLowerCase()));
+      for (const outfit of sorted) grid.append(buildCard(outfit, sharedIndex));
+      els.outfitsArea.append(grid);
+    }
+  }
+
+  function buildCard(outfit, sharedIndex) {
+    const card = el("article", "card");
+    card.style.borderTopColor = `hsl(${jobHue(outfit.job)} 45% 58%)`;
+
+    const head = el("div", "card-head");
+    const titleWrap = el("div");
+    titleWrap.append(el("h3", "", outfit.plate));
+    titleWrap.append(el("span", "job-label", outfit.job));
+    head.append(titleWrap);
+    card.append(head);
+
+    const badges = el("div", "badge-row");
+    const sharedGroups = sharedIndex.get(outfit.id) || [];
+    if (sharedGroups.length > 0) {
+      const lines = sharedGroups.map((g) => {
+        const others = g.sets.filter((s) => s.outfitId !== outfit.id).map((s) => `${s.plate} (${s.job})`);
+        return `${g.display} - also on ${others.join(", ")}`;
+      });
+      const badge = el("span", "badge", `${sharedGroups.length} shared`);
+      badge.title = lines.join("\n");
+      badges.append(badge);
+    }
+    const missingCount = namedPieces(outfit).filter((p) => !p.owned).length;
+    if (missingCount > 0) badges.append(el("span", "badge miss", `${missingCount} to find`));
+    for (const tag of outfit.tags) {
+      const chip = el("button", "mini-tag", tag);
+      chip.type = "button";
+      chip.title = `Filter plates by "${tag}"`;
+      chip.addEventListener("click", () => {
+        ui.tag = tag;
+        renderAll();
+      });
+      badges.append(chip);
+    }
+    if (badges.childNodes.length > 0) card.append(badges);
+
+    const withinDups = findWithinSetDups(outfit);
+    if (withinDups.length > 0) {
+      const warn = el("p", "empty-slots", `Heads up: ${withinDups.map((d) => `"${d.display}" appears in ${d.slots.join(" and ")}`).join("; ")}.`);
+      card.append(warn);
+    }
+
+    const piecesBox = el("div", "pieces");
+    const usedSlots = [];
+    for (const piece of outfit.pieces) {
+      if (!piece.name.trim()) continue;
+      usedSlots.push(piece.slot);
+      const row = el("div", "piece-row");
+      row.append(el("span", "slot-label", piece.slot));
+      const nameWrap = el("span");
+      const name = el("span", "piece-name" + (piece.owned ? "" : " missing"), piece.name.trim());
+      nameWrap.append(name);
+      if (piece.dye.trim()) nameWrap.append(el("span", "piece-dye-note", ` - dye: ${piece.dye.trim()}`));
+      row.append(nameWrap);
+      const toggle = el("button", "own-toggle" + (piece.owned ? "" : " missing"), piece.owned ? "\u2713" : "need it");
+      toggle.type = "button";
+      toggle.title = piece.owned ? "Mark as still needed" : "Mark as owned";
+      toggle.addEventListener("click", () => {
+        piece.owned = !piece.owned;
+        outfit.updatedAt = new Date().toISOString();
+        save();
+        renderAll();
+      });
+      row.append(toggle);
+      piecesBox.append(row);
+    }
+    card.append(piecesBox);
+
+    const blankSlots = SLOT_NAMES.filter((slot) => !usedSlots.includes(slot));
+    if (blankSlots.length > 0) card.append(el("p", "empty-slots", `Empty: ${blankSlots.join(", ")}`));
+
+    if (outfit.screenshot.trim()) {
+      const snap = el("p", "snapshot");
+      snap.append(el("span", "lbl", "Screenshot"));
+      snap.append(el("span", "", outfit.screenshot.trim()));
+      card.append(snap);
+    }
+
+    const actions = el("div", "card-actions");
+    const edit = el("button", "btn small", "Edit");
+    edit.type = "button";
+    edit.addEventListener("click", () => openOutfitDialog(outfit));
+    const remove = el("button", "btn small ghost danger", "Delete");
+    remove.type = "button";
+    remove.addEventListener("click", () => {
+      if (confirm(`Delete plate "${outfit.plate}" (${outfit.job})? This cannot be undone.`)) {
+        state.outfits = state.outfits.filter((o) => o.id !== outfit.id);
+        save();
+        renderAll();
+      }
+    });
+    actions.append(edit, remove);
+    card.append(actions);
+    return card;
+  }
+
+  function renderShared() {
+    els.sharedList.textContent = "";
+    const groups = findCrossSetDups(state.outfits);
+    if (groups.length === 0) {
+      els.sharedList.append(el("p", "empty-note", "No pieces shared across plates. Your dye budget thanks you."));
+      return;
+    }
+    for (const group of groups) {
+      const item = el("div", "list-item");
+      const line = el("div", "item-line");
+      line.append(el("span", "item-name", group.display));
+      line.append(el("span", "count-pill", `${group.sets.length} plates`));
+      item.append(line);
+      const refs = el("div");
+      for (const set of group.sets) {
+        refs.append(el("span", "ref-chip", `${set.plate} (${set.job}) \u00b7 ${set.slot}`));
+      }
+      item.append(refs);
+      els.sharedList.append(item);
+    }
+  }
+
+  function renderShopping() {
+    els.shoppingList.textContent = "";
+    const list = buildShoppingList(state.outfits);
+    if (list.length === 0) {
+      els.shoppingList.append(el("p", "empty-note", "Nothing on the list. Every piece accounted for."));
+      return;
+    }
+    for (const item of list) {
+      const row = el("div", "list-item");
+      const line = el("div", "item-line");
+      line.append(el("span", "item-name", item.display));
+      line.append(el("span", "count-pill", `\u00d7${item.count}`));
+      row.append(line);
+      row.append(el("div", "ref-note", item.refs.map((r) => `${r.plate} (${r.job}) \u00b7 ${r.slot}`).join(" \u00b7 ")));
+      const got = el("button", "btn small", "Mark owned everywhere");
+      got.type = "button";
+      got.title = "Mark this piece as owned on every plate that needs it";
+      got.addEventListener("click", () => {
+        for (const outfit of state.outfits) {
+          for (const piece of outfit.pieces) {
+            if (normalizePieceName(piece.name) === item.key && piece.owned === false) piece.owned = true;
+          }
+        }
+        save();
+        renderAll();
+      });
+      row.append(got);
+      els.shoppingList.append(row);
+    }
+  }
+
+  function renderIdeas() {
+    els.ideasList.textContent = "";
+    if (state.ideas.length === 0) {
+      els.ideasList.append(el("p", "empty-note", "Collect outfit ideas here - a stray /gpose inspiration, a Market Board find, anything."));
+      return;
+    }
+    for (const idea of state.ideas) {
+      const item = el("div", "list-item");
+      item.append(el("p", "idea-text", idea.text));
+      const meta = el("div", "idea-date", `added ${new Date(idea.createdAt).toLocaleDateString()}`);
+      item.append(meta);
+      const actions = el("div", "idea-actions");
+      const use = el("button", "btn small", "Use in outfit");
+      use.type = "button";
+      use.title = "Start a new plate with this idea as the working title";
+      use.addEventListener("click", () => {
+        openOutfitDialog(null);
+        const firstLine = idea.text.split("\n")[0].trim();
+        if (firstLine) els.fieldPlate.value = firstLine.slice(0, 48);
+        els.fieldPlate.focus();
+      });
+      const remove = el("button", "btn small ghost danger", "Delete");
+      remove.type = "button";
+      remove.addEventListener("click", () => {
+        if (confirm("Delete this idea?")) {
+          state.ideas = state.ideas.filter((i) => i.id !== idea.id);
+          save();
+          renderAll();
+        }
+      });
+      actions.append(use, remove);
+      item.append(actions);
+      els.ideasList.append(item);
+    }
+  }
+
+  function renderAll() {
+    const sharedIndex = computeSharedIndex(findCrossSetDups(state.outfits));
+    renderStats();
+    renderFilters();
+    renderCards(sharedIndex);
+    renderShared();
+    renderShopping();
+    renderIdeas();
+  }
+
+  function buildPiecesEditor() {
+    els.piecesEditor.textContent = "";
+    for (const slot of SLOT_NAMES) {
+      const row = el("div", "piece-edit-row");
+      row.append(el("span", "slot-label", slot));
+      const name = el("input");
+      name.type = "text";
+      name.dataset.slot = slot;
+      name.dataset.field = "name";
+      name.placeholder = "piece name";
+      name.setAttribute("aria-label", `${slot} piece name`);
+      const dye = el("input");
+      dye.type = "text";
+      dye.dataset.slot = slot;
+      dye.dataset.field = "dye";
+      dye.placeholder = "dye (optional)";
+      dye.setAttribute("aria-label", `${slot} dye note`);
+      const ownedLabel = el("label", "owned-check");
+      const owned = el("input");
+      owned.type = "checkbox";
+      owned.dataset.slot = slot;
+      owned.dataset.field = "owned";
+      owned.checked = true;
+      owned.setAttribute("aria-label", `${slot} owned`);
+      ownedLabel.append(owned, document.createTextNode("owned"));
+      row.append(name, dye, ownedLabel);
+      els.piecesEditor.append(row);
+    }
+  }
+
+  function setFormError(message) {
+    if (message) {
+      els.formError.textContent = message;
+      els.formError.hidden = false;
+    } else {
+      els.formError.hidden = true;
+    }
+  }
+
+  function openOutfitDialog(outfit) {
+    editingId = outfit ? outfit.id : null;
+    els.dialogTitle.textContent = outfit ? "Edit plate" : "New plate";
+    setFormError("");
+    els.fieldJob.value = outfit ? outfit.job : "";
+    els.fieldPlate.value = outfit ? outfit.plate : "";
+    els.fieldScreenshot.value = outfit ? outfit.screenshot : "";
+    const tags = outfit ? outfit.tags : [];
+    for (const tag of PRESET_TAGS) els.tagChecks[tag].checked = tags.includes(tag);
+    const custom = tags.filter((t) => !PRESET_TAGS.includes(t));
+    els.fieldTagsCustom.value = custom.join(", ");
+    for (const input of els.piecesEditor.querySelectorAll("input")) {
+      const piece = outfit ? outfit.pieces.find((p) => p.slot === input.dataset.slot) : null;
+      if (input.dataset.field === "name") input.value = piece ? piece.name : "";
+      if (input.dataset.field === "dye") input.value = piece ? piece.dye : "";
+      if (input.dataset.field === "owned") input.checked = piece ? piece.owned : true;
+    }
+    els.dialog.showModal();
+    els.fieldJob.focus();
+  }
+
+  function closeDialog() {
+    els.dialog.close();
+    editingId = null;
+  }
+
+  function collectForm() {
+    const plate = els.fieldPlate.value.trim();
+    if (!plate) return { error: "Give your plate a name." };
+    const job = els.fieldJob.value.trim() || "General";
+    const tags = [];
+    for (const tag of PRESET_TAGS) {
+      if (els.tagChecks[tag].checked) tags.push(tag);
+    }
+    for (const tag of els.fieldTagsCustom.value.split(",")) {
+      const clean = tag.trim().toLowerCase();
+      if (clean && !tags.includes(clean)) tags.push(clean);
+    }
+    const pieces = defaultPieces();
+    let named = 0;
+    for (const input of els.piecesEditor.querySelectorAll("input")) {
+      const piece = pieces.find((p) => p.slot === input.dataset.slot);
+      if (input.dataset.field === "name") piece.name = input.value.trim();
+      if (input.dataset.field === "dye") piece.dye = input.value.trim();
+      if (input.dataset.field === "owned") piece.owned = input.checked;
+    }
+    for (const piece of pieces) if (piece.name) named += 1;
+    if (named === 0) return { error: "Add at least one piece." };
+    return {
+      outfit: {
+        job,
+        plate,
+        tags,
+        screenshot: els.fieldScreenshot.value.trim(),
+        pieces,
+      },
+    };
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const result = collectForm();
+    if (result.error) {
+      setFormError(result.error);
+      return;
+    }
+    const now = new Date().toISOString();
+    if (editingId) {
+      const existing = state.outfits.find((o) => o.id === editingId);
+      if (existing) {
+        Object.assign(existing, result.outfit, { updatedAt: now });
+      }
+    } else {
+      state.outfits.push({ id: genId(), ...result.outfit, createdAt: now, updatedAt: now });
+    }
+    closeDialog();
+    save();
+    renderAll();
+  }
+
+  function exportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `glamour-log-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("Backup downloaded");
+  }
+
+  function importData(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        if (!parsed || !Array.isArray(parsed.outfits)) throw new Error("bad shape");
+        const next = freshState();
+        next.outfits = parsed.outfits.map(hydrateOutfit);
+        next.ideas = Array.isArray(parsed.ideas) ? parsed.ideas.map(hydrateIdea) : [];
+        const summary = `${next.outfits.length} plates and ${next.ideas.length} ideas`;
+        if (confirm(`Replace your current data with this backup (${summary})?`)) {
+          state = next;
+          save();
+          renderAll();
+        }
+      } catch (err) {
+        alert("That file does not look like a Glamour Log backup.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function sampleState() {
+    const now = new Date().toISOString();
+    const mk = (id, job, plate, specs, tags, screenshot) => ({
+      id,
+      job,
+      plate,
+      pieces: SLOT_NAMES.map((slot) => {
+        const spec = specs.find((s) => s[0] === slot);
+        return spec
+          ? { slot, name: spec[1], dye: spec[2] || "", owned: spec[3] !== false }
+          : { slot, name: "", dye: "", owned: true };
+      }),
+      tags,
+      screenshot,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return {
+      version: 1,
+      updatedAt: now,
+      outfits: [
+        mk("sample-whm", "White Mage", "Raid Night Heals", [
+          ["Weapon", "Turali Cane", "", true],
+          ["Head", "Ascension Circlet of Healing", "", true],
+          ["Body", "Saintly Robe", "Loam Brown", true],
+          ["Legs", "Hallowedsky Breeches of Healing", "Soot Black", false],
+          ["Feet", "Ascension Sandals of Healing", "", true],
+        ], ["raid night"], "Limsa inn room after raid - /gpose, warm lamp side."),
+        mk("sample-sch", "Scholar", "Cozy Weekend", [
+          ["Weapon", "Expeditioner's Codex", "", true],
+          ["Head", "Wanderer's Circlet", "Celeste Green", true],
+          ["Body", "Woad Skydancer's Robe", "", true],
+          ["Feet", "Hallowedsky Shoes of Healing", "", false],
+        ], ["casual"], "Kugane boardwalk, sitting emote with tea."),
+        mk("sample-drk", "Dark Knight", "Stars and Shadows", [
+          ["Weapon", "Void Zeta Greatsword", "", true],
+          ["Head", "Wanderer's Circlet", "Snow White", true],
+          ["Body", "Warg Coat", "Ink Blue", true],
+          ["Legs", "Warg Breeches", "", true],
+          ["Feet", "Warg Sabatons", "Soot Black", false],
+        ], ["season"], "Gridania star tree at night, noir filter."),
+      ],
+      ideas: [
+        hydrateIdea({ id: "sample-idea-1", text: "Moonfire Faire: straw hat + summer tunic, dye Honey Yellow. Check Market Board prices first.", createdAt: now }),
+        hydrateIdea({ id: "sample-idea-2", text: "Deep-dungeon wild look for the Dark Knight plate - muddy browns, maybe re-dye the Warg pieces.", createdAt: now }),
+      ],
+    };
+  }
+
+  els.btnNewPlate.addEventListener("click", () => openOutfitDialog(null));
+  els.btnCancel.addEventListener("click", closeDialog);
+  els.form.addEventListener("submit", handleSubmit);
+  els.search.addEventListener("input", () => {
+    ui.query = els.search.value;
+    renderAll();
+  });
+  els.ideaForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = els.ideaInput.value.trim();
+    if (!text) return;
+    state.ideas.unshift({ id: genId(), text, createdAt: new Date().toISOString() });
+    els.ideaInput.value = "";
+    save();
+    renderAll();
+  });
+  els.btnExport.addEventListener("click", exportData);
+  els.btnImport.addEventListener("click", () => els.importFile.click());
+  els.importFile.addEventListener("change", () => {
+    if (els.importFile.files && els.importFile.files[0]) importData(els.importFile.files[0]);
+    els.importFile.value = "";
+  });
+  els.btnSample.addEventListener("click", () => {
+    if (confirm("Load sample data? This replaces everything currently saved in this browser.")) {
+      state = sampleState();
+      save();
+      renderAll();
+    }
+  });
+  els.btnClearData.addEventListener("click", () => {
+    if (confirm("Delete ALL plates and ideas from this browser? This cannot be undone.") &&
+        confirm("Really sure? There is no undo once this is gone.")) {
+      state = freshState();
+      save();
+      renderAll();
+    }
+  });
+
+  buildPiecesEditor();
+  renderAll();
+})();
+</script>
+</body>
+</html>
